@@ -765,7 +765,7 @@
 <!-- 4 MAIN TABS -->
 <div class="mode-tabs">
   <button class="mode-tab active" id="tabBtnStudy" onclick="switchTab('study')">✨ Study + Block Blast</button>
-  <button class="mode-tab" id="tabBtnArcade" onclick="switchTab('arcade')">🧩 Full Block Blast Arcade</button>
+  <button class="mode-tab" id="tabBtnArcade" onclick="switchTab('arcade')">🧩 Block Blast Reward Board</button>
   <button class="mode-tab" id="tabBtnExam" onclick="switchTab('exam')">🎓 Official Exam Mode</button>
   <button class="mode-tab" id="tabBtnCheat" onclick="switchTab('cheat')">📊 Cheat Sheets & Author Clashes</button>
 </div>
@@ -839,37 +839,38 @@
           <div class="blast-header">
             <div class="blast-title">🧩 Manta Block Blast!</div>
             <div class="blast-scores">
+              <span class="blast-score-pill" id="queuedPacksPill" style="background:#fef3c7; color:#b45309; border:1px solid #f59e0b;">🎁 Saved Packs: <span id="blastQueuedVal">0</span></span>
               <span class="blast-score-pill">Score: <span id="blastScoreVal">0</span></span>
               <span class="blast-score-pill">Lines: <span id="blastLinesVal">0</span></span>
             </div>
           </div>
-          <div class="blast-hint" id="blastStatusHint">
-            Tap a Coral Block below, then tap the 8×8 Reef Grid to place it! Clear full rows or columns for Manta Combos! 🌊
+          <div class="blast-hint" id="blastStatusHint" style="background:#fff1f2; color:#be123c; border:1.5px dashed #fda4af;">
+            🔒 <strong>TRAY LOCKED!</strong> Answer a Law Question correctly (or pass an Official Exam) to unlock +3 Coral Blocks! 🦈⚖️
           </div>
 
           <div class="blast-grid" id="blastGrid"></div>
 
-          <div class="tray-label">🪸 YOUR CORAL BLOCK TRAY (Tap to Select)</div>
+          <div class="tray-label" id="trayHeaderLabel">🔒 CORAL BLOCK TRAY (Unlock by Answering Correctly!)</div>
           <div class="piece-tray" id="pieceTray"></div>
 
           <div class="blast-actions">
-            <button class="blast-btn" onclick="refillBlastTray(true)">🎁 Free ADHD Refill (3 Blocks)</button>
-            <button class="blast-btn alt" onclick="resetBlastBoard()">🔄 Reset Grid</button>
+            <button class="blast-btn" id="earnMoreBlocksBtn" onclick="nudgeToQuestion()">🎯 Answer Law Q to Unlock +3 Blocks!</button>
+            <button class="blast-btn alt" onclick="resetBlastBoard()" title="Clears stuck blocks on the 8x8 grid without giving free pieces">🔄 Clear Grid Only</button>
           </div>
         </div>
       </div>
     </div>
   </section>
 
-  <!-- TAB 2: FULL-SCREEN BLOCK BLAST ARCADE + FLASH RULES -->
+  <!-- TAB 2: FULL-SCREEN BLOCK BLAST REWARD BOARD + FLASH RULES -->
   <section id="tabArcade" class="hidden">
     <div class="q-card" style="max-width:680px; margin:0 auto; text-align:center;">
-      <h2 style="color:var(--ocean-deep); margin-bottom:6px;">🧩 Manta Block Blast: Coral Reef Arcade Mode!</h2>
+      <h2 style="color:var(--ocean-deep); margin-bottom:6px;">🧩 Manta Block Blast: Dopamine Reward Board!</h2>
       <p style="color:var(--text-muted); font-size:0.92rem; margin-bottom:14px;">
-        Need a 2-minute ADHD dopamine recharge? Place Coral Blocks to clear horizontal rows & vertical columns! Every 3 lines cleared pops up a 5-Second Civil Law Power-Up Rule! 🦈✨
+        Spend the Coral Block Packs you unlocked from correct Law Answers & Official Exams! Every row or column cleared pops up a 5-Second Civil Law Power-Up Rule! 🦈✨
       </p>
       <div id="arcadeFlashBanner" class="tldr-box" style="margin-bottom:16px; text-align:left;">
-        ⚡ <strong>MANTA POWER-UP RULE:</strong> Clear a row or column on the grid below to cycle through high-yield 5-second Bar rules!
+        ⚡ <strong>MANTA POWER-UP RULE:</strong> Clear a row or column on the grid below using your earned blocks to cycle through high-yield 5-second Bar rules!
       </div>
       <div id="arcadeBlastHost" style="max-width:420px; margin:0 auto;"></div>
     </div>
@@ -1337,6 +1338,10 @@ function renderStudyQuestion() {
   }
 }
 
+// Track questions already rewarded in this session so she must answer new questions to earn more blocks!
+let earnedQuestionKeys = new Set();
+let queuedBlockPacks = 0;
+
 function selectStudyOption(selectedIdx) {
   const q = filteredQuestions[currentIndex];
   const btns = document.querySelectorAll('#mcqOptionsWrap .opt-btn');
@@ -1347,19 +1352,39 @@ function selectStudyOption(selectedIdx) {
   });
 
   const isCorrect = selectedIdx === q.ans;
+  const qKey = activeDeckKey + '_' + q.id;
+
   if (isCorrect) {
     streak++;
     pearls += 20 + Math.min(streak * 2, 20);
     playSound('correct');
-    refillBlastTray(true);
-    document.getElementById('feedbackHeader').textContent = `✅ Spot On, Future Atty. Alyssa! (+20 Pearls & Fresh Coral Blocks Unlocked!)`;
-    document.getElementById('mantaSpeechText').textContent = `"Boom! Correct answer! Now place your Coral Blocks on the 8×8 Reef Grid to blast a line!" 🦈🧩`;
+
+    if (!earnedQuestionKeys.has(qKey)) {
+      earnedQuestionKeys.add(qKey);
+      let packsWon = 1;
+      let bonusMsg = '';
+      if (streak > 0 && streak % 3 === 0) {
+        packsWon += 1;
+        pearls += 30;
+        bonusMsg = ' 🔥 3-STREAK JACKPOT: +1 BONUS BLOCK PACK & +30 PEARLS!';
+        showToast('🔥 3-IN-A-ROW STREAK! +6 CORAL BLOCKS UNLOCKED!');
+      } else {
+        showToast('🎁 +3 CORAL BLOCKS UNLOCKED!');
+      }
+      grantBlockPacks(packsWon, `✅ Correct! Unlocked +${packsWon * 3} Coral Blocks!${bonusMsg}`);
+      document.getElementById('feedbackHeader').textContent = `✅ Spot On, Future Atty. Alyssa! (+20 Pearls & +${packsWon * 3} Coral Blocks Unlocked!${bonusMsg})`;
+      document.getElementById('mantaSpeechText').textContent = `"Boom! You earned ${packsWon * 3} Coral Blocks! Place them on the 8×8 Reef Grid now, then answer the next question for more!" 🦈🧩`;
+    } else {
+      document.getElementById('feedbackHeader').textContent = `✅ Correct! (You already claimed the Coral Blocks for Q#${q.id}—click Next Question ➡️ to earn 3 more blocks!)`;
+      document.getElementById('mantaSpeechText').textContent = `"You already mastered Q#${q.id}! Hit Next Question ➡️ to unlock 3 fresh Coral Blocks!" 🦈✨`;
+    }
   } else {
     streak = 0;
     pearls += 5;
     playSound('wrong');
-    document.getElementById('feedbackHeader').textContent = `💡 Good try! Read the ⚡ 5-Second Rule below (+5 Effort Pearls):`;
-    document.getElementById('mantaSpeechText').textContent = `"No worries! Look at the yellow 5-Second Rule box—that's the exact trick the Bar uses!" 🪸💖`;
+    document.getElementById('feedbackHeader').textContent = `❌ Not quite! No Coral Blocks unlocked on this try—read the ⚡ 5-Second Rule below (+5 Effort Pearls):`;
+    document.getElementById('mantaSpeechText').textContent = `"Oops! Blocks only unlock on a correct answer! Read the yellow 5-Second Rule below, then hit Next Question ➡️ to earn 3 Coral Blocks!" 🪸💖`;
+    updateBlastLockStatus();
   }
   updateHUD();
   showExplanation(q);
@@ -1367,12 +1392,23 @@ function selectStudyOption(selectedIdx) {
 
 function revealEssayAnswer() {
   const q = filteredQuestions[currentIndex];
+  const textVal = (document.getElementById('essayTextarea').value || '').trim();
+  if (textVal.length < 10) {
+    playSound('wrong');
+    alert('🦈 Judge Manta says: Type at least a short ALAC answer in the box first before unlocking your 3 Coral Blocks!');
+    return;
+  }
+  const qKey = activeDeckKey + '_essay_' + q.id;
   pearls += 25;
   streak++;
   playSound('correct');
-  refillBlastTray(true);
+  if (!earnedQuestionKeys.has(qKey)) {
+    earnedQuestionKeys.add(qKey);
+    grantBlockPacks(1, '✍️ ALAC Essay Completed! +3 Coral Blocks Unlocked!');
+    showToast('🎁 +3 CORAL BLOCKS UNLOCKED!');
+  }
   updateHUD();
-  document.getElementById('feedbackHeader').textContent = `✨ Official Bar Answer & 5-Second Rule (+25 Pearls & Coral Blocks Unlocked!)`;
+  document.getElementById('feedbackHeader').textContent = `✨ Official Bar Answer & 5-Second Rule (+25 Pearls & +3 Coral Blocks Unlocked!)`;
   showExplanation(q);
 }
 
@@ -1399,7 +1435,7 @@ function randomQuestion() {
 }
 
 // ==========================================
-// 🧩 MANTA BLOCK BLAST! (8x8 REEF PUZZLE ENGINE)
+// 🧩 MANTA BLOCK BLAST! (STRICTLY REWARD-GATED 8x8 ENGINE)
 // ==========================================
 const GRID_SIZE = 8;
 let blastBoard = Array.from({ length: GRID_SIZE }, () => Array(GRID_SIZE).fill(null));
@@ -1419,22 +1455,102 @@ const BLOCK_SHAPES = [
   { name: 'Mega Pearl 3x3', color: '#facc15', cells: [[0,0],[0,1],[0,2],[1,0],[1,1],[1,2],[2,0],[2,1],[2,2]] }
 ];
 
+// Starts LOCKED (empty) until she answers a question correctly!
 let trayPieces = [null, null, null];
 let selectedTrayIdx = 0;
 
 function initBlastGame() {
   renderBlastGrid();
-  refillBlastTray(true);
+  renderPieceTray();
+  updateBlastLockStatus();
 }
 
-function refillBlastTray(forceNew) {
-  if (forceNew || trayPieces.every(p => p === null)) {
-    for (let i = 0; i < 3; i++) {
-      trayPieces[i] = BLOCK_SHAPES[Math.floor(Math.random() * BLOCK_SHAPES.length)];
-    }
-    selectedTrayIdx = 0;
+function spawnThreePiecesIntoTray() {
+  for (let i = 0; i < 3; i++) {
+    trayPieces[i] = BLOCK_SHAPES[Math.floor(Math.random() * BLOCK_SHAPES.length)];
+  }
+  selectedTrayIdx = 0;
+}
+
+function grantBlockPacks(count, customMsg) {
+  if (count <= 0) return;
+  queuedBlockPacks += count;
+  // If tray is currently completely empty, immediately load 1 earned pack into the tray!
+  if (trayPieces.every(p => p === null) && queuedBlockPacks > 0) {
+    queuedBlockPacks--;
+    spawnThreePiecesIntoTray();
   }
   renderPieceTray();
+  updateBlastLockStatus(customMsg);
+}
+
+function updateBlastLockStatus(customMsg) {
+  const hintEl = document.getElementById('blastStatusHint');
+  const headerEl = document.getElementById('trayHeaderLabel');
+  const queuedEl = document.getElementById('blastQueuedVal');
+  const actionBtn = document.getElementById('earnMoreBlocksBtn');
+  if (queuedEl) queuedEl.textContent = queuedBlockPacks;
+
+  const remainingInTray = trayPieces.filter(p => p !== null).length;
+
+  if (remainingInTray === 0 && queuedBlockPacks === 0) {
+    // STRICTLY LOCKED STATE
+    if (hintEl) {
+      hintEl.style.background = '#fff1f2';
+      hintEl.style.color = '#be123c';
+      hintEl.style.border = '1.5px dashed #fda4af';
+      hintEl.innerHTML = '🔒 <strong>TRAY LOCKED!</strong> Answer a Law Question correctly (or finish an Official Exam) to unlock +3 Coral Blocks! 🦈⚖️';
+    }
+    if (headerEl) {
+      headerEl.textContent = '🔒 CORAL BLOCK TRAY (0 Blocks — Answer a Question Correctly!)';
+    }
+    if (actionBtn) {
+      actionBtn.textContent = '🎯 Answer Law Q to Unlock +3 Blocks!';
+    }
+  } else {
+    // UNLOCKED & PLAYABLE STATE
+    if (hintEl) {
+      hintEl.style.background = '#ecfdf5';
+      hintEl.style.color = '#065f46';
+      hintEl.style.border = '1.5px solid #6ee7b7';
+      hintEl.innerHTML = customMsg
+        ? `🎉 <strong>${customMsg}</strong> (${remainingInTray} in tray${queuedBlockPacks > 0 ? ` + ${queuedBlockPacks} saved pack${queuedBlockPacks > 1 ? 's' : ''}` : ''})`
+        : `🧩 <strong>${remainingInTray} Coral Block${remainingInTray > 1 ? 's' : ''} Ready!</strong> Tap a block below, then tap the 8×8 Reef Grid!${queuedBlockPacks > 0 ? ` (🎁 ${queuedBlockPacks} more pack${queuedBlockPacks > 1 ? 's' : ''} queued!)` : ''}`;
+    }
+    if (headerEl) {
+      headerEl.textContent = `🪸 YOUR EARNED CORAL BLOCKS (${remainingInTray} Left in Tray • ${queuedBlockPacks} Saved Packs)`;
+    }
+    if (actionBtn) {
+      actionBtn.textContent = queuedBlockPacks > 0
+        ? `🎁 ${queuedBlockPacks} Saved Pack${queuedBlockPacks > 1 ? 's' : ''} Ready (Auto-loads when tray empties!)`
+        : '➕ Want More Blocks? Answer Next Law Q!';
+    }
+  }
+}
+
+function nudgeToQuestion() {
+  const remainingInTray = trayPieces.filter(p => p !== null).length;
+  if (remainingInTray === 0 && queuedBlockPacks > 0) {
+    queuedBlockPacks--;
+    spawnThreePiecesIntoTray();
+    renderPieceTray();
+    updateBlastLockStatus('Loaded your next Earned Block Pack!');
+    playSound('correct');
+    return;
+  }
+  // Switch to Study tab if in Arcade tab, scroll to question card, and advance if already answered!
+  switchTab('study');
+  const feedbackWrap = document.getElementById('feedbackWrap');
+  if (feedbackWrap && !feedbackWrap.classList.contains('hidden')) {
+    nextQuestion();
+  }
+  const qCard = document.getElementById('studyQuestionCard');
+  if (qCard) {
+    qCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    qCard.style.boxShadow = '0 0 0 4px #00b4d8';
+    setTimeout(() => { qCard.style.boxShadow = ''; }, 1200);
+  }
+  playSound('pop');
 }
 
 function renderBlastGrid() {
@@ -1460,6 +1576,7 @@ function renderBlastGrid() {
 function renderPieceTray() {
   const trayEl = document.getElementById('pieceTray');
   trayEl.innerHTML = '';
+  const allEmpty = trayPieces.every(p => p === null);
   trayPieces.forEach((piece, idx) => {
     const slot = document.createElement('div');
     slot.className = 'tray-slot' + (piece ? '' : ' empty') + (idx === selectedTrayIdx && piece ? ' selected' : '');
@@ -1485,7 +1602,11 @@ function renderPieceTray() {
       }
       slot.appendChild(mini);
     } else {
-      slot.innerHTML = '<span style="font-size:0.75rem;">✓ Placed</span>';
+      slot.onclick = () => nudgeToQuestion();
+      slot.style.cursor = 'pointer';
+      slot.innerHTML = allEmpty
+        ? '<span style="font-size:0.74rem; color:#be123c; font-weight:800;">🔒 Answer Q!</span>'
+        : '<span style="font-size:0.75rem;">✓ Placed</span>';
     }
     trayEl.appendChild(slot);
   });
@@ -1526,12 +1647,14 @@ function previewPieceOnGrid(baseR, baseC) {
 function placePieceOnGrid(baseR, baseC) {
   const piece = trayPieces[selectedTrayIdx];
   if (!piece) {
-    document.getElementById('blastStatusHint').textContent = 'Tap another Coral Block in the tray or click 🎁 Free Refill!';
+    playSound('wrong');
+    updateBlastLockStatus();
+    showToast('🔒 Answer a Law Question correctly to unlock 3 Coral Blocks!');
     return;
   }
   if (!canPlacePiece(piece, baseR, baseC)) {
     playSound('wrong');
-    document.getElementById('blastStatusHint').textContent = 'Oops! That Coral Block doesn\'t fit there—try an open spot! 🪸';
+    document.getElementById('blastStatusHint').innerHTML = '⚠️ <strong>Oops! That Coral Block doesn\'t fit there</strong>—try an open spot on the 8×8 grid! 🪸';
     return;
   }
 
@@ -1540,14 +1663,27 @@ function placePieceOnGrid(baseR, baseC) {
     blastBoard[baseR + dr][baseC + dc] = piece.color;
   }
   trayPieces[selectedTrayIdx] = null;
-  // Auto-select next available piece in tray
-  const nextIdx = trayPieces.findIndex(p => p !== null);
-  if (nextIdx !== -1) selectedTrayIdx = nextIdx;
-  else refillBlastTray(true);
 
   blastScore += piece.cells.length * 10;
   playSound('pop');
   checkAndClearLines();
+
+  // Auto-select next available piece in tray, OR load next earned pack, OR LOCK TRAY!
+  const nextIdx = trayPieces.findIndex(p => p !== null);
+  if (nextIdx !== -1) {
+    selectedTrayIdx = nextIdx;
+    updateBlastLockStatus();
+  } else if (queuedBlockPacks > 0) {
+    queuedBlockPacks--;
+    spawnThreePiecesIntoTray();
+    showToast('🎁 Next Earned Block Pack Loaded!');
+    updateBlastLockStatus('Loaded your next saved Pack of 3 Coral Blocks!');
+  } else {
+    // All 3 pieces used and 0 queued packs -> LOCK THE TRAY!
+    updateBlastLockStatus();
+    document.getElementById('mantaSpeechText').textContent = '"All 3 Coral Blocks placed! Answer the next Law Question correctly to unlock 3 more blocks!" 🦈🔒';
+  }
+
   renderBlastGrid();
   renderPieceTray();
   updateHUD();
@@ -1587,7 +1723,6 @@ function checkAndClearLines() {
       ? `🦈 MEGA MANTA COMBO ×${totalCleared}! +${bonus} PTS!`
       : `🌊 CORAL LINE BLAST! +${bonus} PTS!`;
     showToast(msg);
-    document.getElementById('blastStatusHint').textContent = `${msg} (+${totalCleared * 15} Ocean Pearls!)`;
 
     // Update Arcade Flash Rule
     const allQs = DECKS[activeDeckKey];
@@ -1601,8 +1736,9 @@ function checkAndClearLines() {
 
 function resetBlastBoard() {
   blastBoard = Array.from({ length: GRID_SIZE }, () => Array(GRID_SIZE).fill(null));
-  refillBlastTray(true);
+  // Does NOT refill or grant free blocks! Only clears the 8x8 board cells.
   renderBlastGrid();
+  updateBlastLockStatus();
   playSound('pop');
 }
 
@@ -1702,6 +1838,12 @@ function submitOfficialExam() {
   });
   const pct = Math.round((correctCount / examItems.length) * 100);
   pearls += correctCount * 25;
+  // Award 1 Block Pack per correct answer + 2 Bonus Packs if Passed (>= 75%)!
+  const bonusPacks = pct >= 75 ? 2 : 0;
+  const totalPacksEarned = correctCount + bonusPacks;
+  if (totalPacksEarned > 0) {
+    grantBlockPacks(totalPacksEarned, `🏆 Exam Reward: +${totalPacksEarned} Block Packs (${totalPacksEarned * 3} Coral Blocks) Unlocked!`);
+  }
   updateHUD();
   playSound(pct >= 75 ? 'blast' : 'correct');
 
@@ -1712,13 +1854,13 @@ function submitOfficialExam() {
   let verdict = '';
   if (pct >= 85) {
     document.getElementById('scoreEmoji').textContent = '👑🦈🎉';
-    verdict = 'OUTSTANDING BAR TOPNOTCHER LEVEL! Mikko officially owes you an Iloilo coffee & snack treat! 🧋🥟💖';
+    verdict = `OUTSTANDING BAR TOPNOTCHER LEVEL! You unlocked +${totalPacksEarned} Coral Block Packs (${totalPacksEarned * 3} Blocks) for Manta Block Blast AND Mikko owes you an Iloilo coffee & snack treat! 🧋🥟💖`;
   } else if (pct >= 75) {
     document.getElementById('scoreEmoji').textContent = '🌊🦈✨';
-    verdict = 'PASSED WITH FLYING FINS (75%+ Bar Standard)! You unlocked your Iloilo study treat! 🧋💖';
+    verdict = `PASSED WITH FLYING FINS (75%+ Bar Standard)! You unlocked +${totalPacksEarned} Coral Block Packs (${totalPacksEarned * 3} Blocks) + your Iloilo study treat! 🧋💖`;
   } else {
     document.getElementById('scoreEmoji').textContent = '🪸🦈💪';
-    verdict = 'Good practice swim! Check the yellow ⚡ 5-Second Rules below and try another round!';
+    verdict = `Good practice swim! You earned +${totalPacksEarned} Coral Block Pack${totalPacksEarned === 1 ? '' : 's'} (${totalPacksEarned * 3} Blocks) from your ${correctCount} correct answer${correctCount === 1 ? '' : 's'}. Review the yellow ⚡ 5-Second Rules below!`;
   }
   document.getElementById('scoreVerdictText').textContent = verdict;
 
